@@ -10,6 +10,8 @@ connectDB();
 app.use(express.json());
 app.use(cors());
 
+
+
 app.post("/api/attendance/mac", async (req, res) => {
     try {
         const mac = req.body.mac_address;
@@ -58,18 +60,18 @@ app.post("/api/mark-attendance", async (req, res) => {
 
         const bulkOperations = students.map(({ reg_no, date, time, status }) => ({
             updateOne: {
-                filter: { reg_no, date, time },
-                update: { $set: { status } },
+                filter: { reg_no, date }, // Removed `time` to ensure the same student isn't marked multiple times a day
+                update: { $set: { status, time } }, // Now updating `time` as well
                 upsert: true,
             }
         }));
 
         await Attendance.bulkWrite(bulkOperations);
 
-        res.json({ message: "Attendance records updated successfully" });
+        res.status(200).json({ success: true, message: "Attendance records updated successfully" });
     } catch (error) {
         console.error("Error updating attendance:", error);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ success: false, message: "Server error" });
     }
 });
 
