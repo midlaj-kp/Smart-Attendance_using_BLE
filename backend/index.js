@@ -3,12 +3,40 @@ const express = require("express");
 const connectDB = require("./db");
 const Student = require("./models/student");
 const Attendance = require("./models/attendance");
+const Headcount = require("./models/headcount");
 const cors = require("cors");
 
 const app = express();
 connectDB();
 app.use(express.json());
 app.use(cors());
+
+app.post("/api/headcount", async (req, res) => {
+    try {
+      const { count } = req.body;
+  
+      // Update the latest headcount, or create one if it doesn't exist
+      const updatedHeadcount = await Headcount.findOneAndUpdate(
+        {}, // No filter condition since we only keep one document
+        { count, timestamp: Date.now() },
+        { new: true, upsert: true } // `upsert: true` creates the document if it doesn't exist
+      );
+  
+      res.status(200).json({ message: "Headcount updated successfully.", headcount: updatedHeadcount });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update headcount." });
+    }
+  });
+  
+
+  app.get("/api/headcount", async (req, res) => {
+    try {
+      const latestHeadcount = await Headcount.findOne().sort({ timestamp: -1 });
+      res.json({ count: latestHeadcount?.count || 0 });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch headcount." });
+    }
+  });
 
 
 
