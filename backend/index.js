@@ -17,24 +17,28 @@ app.post("/api/attendance/mac", async (req, res) => {
         const mac = req.body.mac_address;
         if (!mac) return res.status(400).json({ message: "MAC address is required" });
 
+        // Find student by MAC address
         const candidate = await Student.findOne({ "mac_address": mac });
         if (!candidate) return res.status(404).json({ message: "Student not found" });
 
+        // Get current date and time
         const date = new Date().toISOString().split('T')[0];
-        const time = new Date().getHours();
+        const time = `${new Date().getHours()}:${new Date().getMinutes()}`; // Store hour & minute
 
-
-        const existingAttendance = await Attendance.findOne({
+        // Find existing attendance record
+        let attendance = await Attendance.findOne({
             reg_no: candidate.reg_no,
             date: date,
-            time: time
         });
 
-        if (existingAttendance) {
-            existingAttendance.status = "Present";
-            await existingAttendance.save();
+        if (attendance) {
+            // Overwrite existing attendance
+            attendance.time = time;
+            attendance.status = "Present";
+            await attendance.save();
         } else {
-            const attendance = new Attendance({
+            // Create new attendance entry
+            attendance = new Attendance({
                 reg_no: candidate.reg_no,
                 date,
                 time,
@@ -43,7 +47,7 @@ app.post("/api/attendance/mac", async (req, res) => {
             await attendance.save();
         }
 
-        res.status(201).json({ message: "Attendance recorded" });
+        res.status(201).json({ message: "Attendance recorded successfully" });
     } catch (error) {
         console.error("Error in attendance marking:", error);
         res.status(500).json({ message: "Server error" });
@@ -60,8 +64,8 @@ app.post("/api/mark-attendance", async (req, res) => {
 
         const bulkOperations = students.map(({ reg_no, date, time, status }) => ({
             updateOne: {
-                filter: { reg_no, date }, // Removed `time` to ensure the same student isn't marked multiple times a day
-                update: { $set: { status, time } }, // Now updating `time` as well
+                filter: { reg_no, date }, 
+                update: { $set: { status, time } }, 
                 upsert: true,
             }
         }));
@@ -80,23 +84,36 @@ app.get("/api/students/attendance", async (req, res) => {
         const students = await Student.aggregate([
             {
                 $lookup: {
-                    from: "attendances", 
+                    from: "attendances",
                     localField: "reg_no",
                     foreignField: "reg_no",
                     as: "attendance"
                 }
             },
             {
+                $unwind: {
+                    path: "$attendance",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $sort: { "attendance.date": -1 } // Sort attendance records by date in descending order
+            },
+            {
+                $group: {
+                    _id: "$reg_no",
+                    name: { $first: "$name" },
+                    section: { $first: "$section" },
+                    latestAttendance: { $first: "$attendance" } // Pick the latest attendance
+                }
+            },
+            {
                 $project: {
                     _id: 0,
-                    reg_no: 1,
+                    reg_no: "$_id",
                     name: 1,
                     section: 1,
-                    attendance: {
-                        date: 1,
-                        time: 1,
-                        status: 1
-                    }
+                    latestAttendance: 1
                 }
             }
         ]);
@@ -107,6 +124,7 @@ app.get("/api/students/attendance", async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 });
+
 
 
 // Add Student
